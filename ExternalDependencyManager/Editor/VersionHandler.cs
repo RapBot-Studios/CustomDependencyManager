@@ -1,31 +1,22 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml;
-using Sirenix.Utilities;
 using UnityEditor;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
 namespace Google
 {
-    [GlobalConfig("Assets/Resources/Config/Editor/"), CreateAssetMenu]
-    public class VersionHandler : GlobalConfig<VersionHandler>
+    public static class VersionHandler
     {
-        public Dependency[] androidDependencies;
-        public Dependency[] iosPods;
-        public Source[] repositories;
-        public Source[] podSources;
-
-        public void FindDependencies()
+#if UNITY_ANDROID
+        public static void FindAndroidDependencies(out Dependency[] androidDependencies, out Source[] repositories)
         {
-            var androidDependencies = new List<Dependency>();
-            var iosPods = new List<Dependency>();
-            var repositories = new HashSet<Source>();
-            var podSources = new HashSet<Source>();
+            var _androidDependencies = new List<Dependency>();
+            var _repositories = new HashSet<Source>();
             var xmlPaths = FindAllDependencyXMLs();
             foreach (var path in xmlPaths)
             {
@@ -33,55 +24,65 @@ namespace Google
                 foreach (var dependency in dependencies)
                 {
                     var addedDependency = false;
-                    for (var i = 0; i < androidDependencies.Count; i++)
+                    for (var i = 0; i < _androidDependencies.Count; i++)
                     {
-                        if (!androidDependencies[i].Equals(dependency)) continue;
-                        if (!dependency.Compare(androidDependencies[i])) continue;
-                        androidDependencies[i] = dependency;
+                        if (!_androidDependencies[i].Equals(dependency)) continue;
+                        if (!dependency.Compare(_androidDependencies[i])) continue;
+                        _androidDependencies[i] = dependency;
                         addedDependency = true;
                         break;
                     }
 
                     if (!addedDependency)
                     {
-                        androidDependencies.Add(dependency);
+                        _androidDependencies.Add(dependency);
                     }
                 }
 
+                _repositories.UnionWith(repos);
+            }
+
+            androidDependencies = _androidDependencies.ToArray();
+            repositories = _repositories.ToArray();
+        }
+#elif UNITY_IOS
+        public static void FindIOSPods(out Dependency[] iosPods, out Source[] podSources)
+        {
+            var _iosPods = new List<Dependency>();
+            var _podSources = new HashSet<Source>();
+            var xmlPaths = FindAllDependencyXMLs();
+            foreach (var path in xmlPaths)
+            {
+                ParseXML(path, out var dependencies, out var pods, out var repos, out var sources);
                 foreach (var pod in pods)
                 {
                     var addedDependency = false;
-                    for (var i = 0; i < iosPods.Count; i++)
+                    for (var i = 0; i < _iosPods.Count; i++)
                     {
-                        if (!iosPods[i].Equals(pod)) continue;
-                        if (!pod.Compare(iosPods[i])) continue;
-                        iosPods[i] = pod;
+                        if (!_iosPods[i].Equals(pod)) continue;
+                        if (!pod.Compare(_iosPods[i])) continue;
+                        _iosPods[i] = pod;
                         addedDependency = true;
                         break;
                     }
 
                     if (!addedDependency)
                     {
-                        iosPods.Add(pod);
+                        _iosPods.Add(pod);
                     }
                 }
 
-                repositories.AddRange(repos);
-                podSources.AddRange(sources);
+                _podSources.UnionWith(sources);
             }
 
-            this.androidDependencies = androidDependencies.ToArray();
-            this.iosPods = iosPods.ToArray();
-            this.repositories = repositories.ToArray();
-            this.podSources = podSources.ToArray();
-            EditorUtility.SetDirty(this);
-            AssetDatabase.SaveAssetIfDirty(this);
+            iosPods = _iosPods.ToArray();
+            podSources = _podSources.ToArray();
         }
-
+#endif
         private const string DependencyPattern = @".*[/\\]Editor[/\\].*Dependencies\.xml$";
         private static bool IsDependenciesFile(string filename) => Regex.Match(filename, DependencyPattern).Success;
 
-        public static string[] FindAllDependencyXMLs()
+        private static string[] FindAllDependencyXMLs()
         {
             var guids = AssetDatabase.FindAssets("Dependencies t:TextAsset", new[] {"Assets", "Packages"});
             var paths = new List<string>(guids.Count());

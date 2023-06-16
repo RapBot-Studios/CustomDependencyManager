@@ -32,8 +32,9 @@ namespace Google
 
         public static void GeneratePodfile(string xcodeProjectPath)
         {
+            VersionHandler.FindIOSPods(out var iosPods, out var podSources);
             var podfile = "";
-            foreach (var source in VersionHandler.Instance.podSources)
+            foreach (var source in podSources)
             {
                 podfile += string.Format(SourceFormat, source.source, source.xmlPath) + "\n";
             }
@@ -49,7 +50,7 @@ namespace Google
                 PlayerSettings.iOS.targetOSVersionString.Trim().Replace("iOS_", "").Replace("_", ".");
             podfile += string.Format(PlatformFormat, platform, targetIOSVersion) + "\n";
             podfile += "target 'UnityFramework' do\n";
-            foreach (var pod in VersionHandler.Instance.iosPods)
+            foreach (var pod in iosPods)
             {
                 podfile += string.Format(PodFormat, pod.package, pod.version, pod.xmlPath) + "\n";
             }
@@ -98,7 +99,6 @@ namespace Google
         {
             if (report.summary.platform is BuildTarget.iOS)
             {
-                VersionHandler.Instance.FindDependencies();
                 GeneratePodfile(report.summary.outputPath);
                 InstallPods(report.summary.outputPath);
             }

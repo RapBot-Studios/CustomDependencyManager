@@ -23,7 +23,7 @@ namespace Google
         private const string ExclusionsSectionFormat =
             "// Android Resolver Exclusions Start\nandroid {{\n  packagingOptions {{\n{0}  }}\n}}\n// Android Resolver Exclusions End";
 
-        private const string RepositoryFormat = "        maven {{\n           url \"{0}\"\n        }}\n";
+        private const string RepositoryFormat = "        maven {{\n           url \"{0}\"  //{1}\n        }}\n";
         private const string DependencyFormat = "    implementation '{0}:{1}' // {2}\n";
         private const string ExclusionFormat = "      exclude ('/lib/{0}/*' + '*')\n";
 
@@ -32,22 +32,22 @@ namespace Google
 
         private const string RepoProjectPath = "$/file:///**DIR_UNITYPROJECT**/$.replace(\"\\\\\", \"/\")";
 
-        private static string GetRepoSection()
+        private static string GetRepoSection(Source[] repositories)
         {
             var repoString = string.Format(RepoSectionHeader, RepoProjectPath);
-            foreach (var repo in VersionHandler.Instance.repositories)
+            foreach (var repo in repositories)
             {
-                repoString += string.Format(RepositoryFormat, repo);
+                repoString += string.Format(RepositoryFormat, repo.source, repo.xmlPath);
             }
 
             repoString += "        mavenLocal()\n        mavenCentral()\n    }\n}";
             return string.Format(RepoSectionFormat, repoString);
         }
 
-        private static string GetDependenciesSection()
+        private static string GetDependenciesSection(Dependency[] dependencies)
         {
             var dependenciesString = "";
-            foreach (var dependency in VersionHandler.Instance.androidDependencies)
+            foreach (var dependency in dependencies)
             {
                 dependenciesString += string.Format(DependencyFormat, dependency.package, dependency.version,
                     dependency.xmlPath);
@@ -96,6 +96,7 @@ namespace Google
 
         public static void PatchMainTemplate()
         {
+            VersionHandler.FindAndroidDependencies(out var dependencies, out var repositories);
             var mainTemplatePath = Path.Combine(AndroidPluginsDir, "mainTemplate.gradle");
             var lines = File.ReadAllLines(mainTemplatePath);
             var fullString = new List<string>();
@@ -191,10 +192,10 @@ namespace Google
             }
 
             fullString.AddRange(header);
-            fullString.Add(GetRepoSection());
+            fullString.Add(GetRepoSection(repositories));
             fullString.AddRange(applyPlugins);
             fullString.AddRange(dependenciesHeader);
-            fullString.Add(GetDependenciesSection());
+            fullString.Add(GetDependenciesSection(dependencies));
             fullString.Add(dependenciesFooter + "\n");
             fullString.Add(GetExclusionsSection());
             fullString.AddRange(footer);
@@ -207,7 +208,6 @@ namespace Google
         {
             if (report.summary.platform is BuildTarget.Android)
             {
-                VersionHandler.Instance.FindDependencies();
                 PatchMainTemplate();
             }
         }
