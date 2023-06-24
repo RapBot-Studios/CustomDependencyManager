@@ -13,8 +13,17 @@ namespace Google
         private const string AndroidPluginsDir = "Assets/Plugins/Android";
 
         private const string RepoSectionHeader =
-            "([rootProject] + (rootProject.subprojects as List)).each {{ project ->\n    project.repositories {{\n        def unityProjectPath = {0}\n        maven {{\n            url \"https://maven.google.com\"\n        }}\n";
-
+#if UNITY_2022_1_OR_NEWER
+            "        def unityProjectPath = {0}\n";
+#else
+        "([rootProject] + (rootProject.subprojects as List)).each {{ project ->\n    project.repositories {{\n        def unityProjectPath = {0}\n        maven {{\n            url \"https://maven.google.com\"\n        }}\n";
+#endif
+        private const string RepoSectionFooter =
+#if UNITY_2022_1_OR_NEWER
+            "        mavenLocal()";
+#else
+            "        mavenLocal()\n        mavenCentral()\n    }\n}";
+#endif
         private const string RepoSectionFormat = "// Android Resolver Repos Start\n{0}\n// Android Resolver Repos End";
 
         private const string DependencySectionFormat =
@@ -40,7 +49,7 @@ namespace Google
                 repoString += string.Format(RepositoryFormat, repo.source, repo.xmlPath);
             }
 
-            repoString += "        mavenLocal()\n        mavenCentral()\n    }\n}";
+            repoString += RepoSectionFooter;
             return string.Format(RepoSectionFormat, repoString);
         }
 
@@ -97,109 +106,140 @@ namespace Google
         public static void PatchMainTemplate()
         {
             VersionHandler.FindAndroidDependencies(out var dependencies, out var repositories);
-            var mainTemplatePath = Path.Combine(AndroidPluginsDir, "mainTemplate.gradle");
-            var lines = File.ReadAllLines(mainTemplatePath);
-            var fullString = new List<string>();
-            string[] header = {""};
-            string[] repos = {""};
-            string[] applyPlugins = {""};
-            string[] dependenciesHeader = {""};
-            string dependenciesFooter = "**DEPS**}";
-            string[] exclusions = {""};
-            string[] footer = {""};
-            var readStep = 0;
-            var startStep = 0;
-            for (var i = 0; i < lines.Length; i++)
+#if UNITY_2022_1_OR_NEWER
+            var settingsTemplatePath = Path.Combine(AndroidPluginsDir, "settingsTemplate.gradle");
+            if (File.Exists(settingsTemplatePath))
             {
-                if (readStep == 0)
+                var lines = File.ReadAllLines(settingsTemplatePath);
+                var cleanedLines = RemoveResolverLines(lines);
+                for (var i = 0; i < cleanedLines.Count; i++)
                 {
-                    if (startStep == 0)
+                    if (cleanedLines[i].Contains("flatDir {"))
                     {
-                        if (lines[i] == "// Android Resolver Repos Start")
-                        {
-                            startStep = i;
-                        }
-                        else if (lines[i].Contains("[rootProject]"))
-                        {
-                            startStep = string.IsNullOrWhiteSpace(lines[i - 1]) ? i - 1 : i;
-                        }
-
-                        header = lines[..startStep];
-                    }
-                    else
-                    {
-                        if (lines[i] == "// Android Resolver Repos End")
-                        {
-                            repos = lines[startStep..(i + 1)];
-                            readStep = 1;
-                            startStep = i + 1;
-                        }
-                        else if (lines[i].StartsWith("apply plugin:"))
-                        {
-                            repos = lines[startStep..i];
-                            readStep = 1;
-                            startStep = i;
-                        }
+                        cleanedLines.Insert(i, GetRepoSection(repositories));
+                        break;
                     }
                 }
-                else if (readStep == 1)
+
+                File.WriteAllLines(settingsTemplatePath, cleanedLines);
+            }
+            else
+            {
+                throw new BuildFailedException("Settings Template Gradle file not found!");
+            }
+#endif
+            var mainTemplatePath = Path.Combine(AndroidPluginsDir, "mainTemplate.gradle");
+            if (File.Exists(mainTemplatePath))
+            {
+                var lines = File.ReadAllLines(mainTemplatePath);
+                var cleanedLines = RemoveResolverLines(lines);
+#if !UNITY_2022_1_OR_NEWER
+                for (var i = 0; i < cleanedLines.Count; i++)
                 {
-                    if (lines[i].StartsWith("dependencies"))
+                    if (cleanedLines[i].Contains("apply plugin: 'com.android.library'"))
                     {
-                        applyPlugins = lines[startStep..i];
-                        startStep = i;
-                    }
-                    else
-                    {
-                        if (lines[i] == "// Android Resolver Dependencies Start" || lines[i] == dependenciesFooter)
-                        {
-                            dependenciesHeader = lines[startStep..i];
-                            startStep = 0;
-                            readStep++;
-                        }
+                        cleanedLines.Insert(i, GetRepoSection(repositories));
+                        break;
                     }
                 }
-                else if (readStep == 2)
-                {
-                    if (startStep == 0)
-                    {
-                        if (lines[i] == "// Android Resolver Exclusions Start")
-                        {
-                            startStep = i;
-                        }
-                        else if (lines[i].StartsWith("android {"))
-                        {
-                            startStep = i;
-                        }
-                    }
-                    else
-                    {
-                        if (lines[i] == "// Android Resolver Exclusions End")
-                        {
-                            exclusions = lines[startStep..(i + 1)];
-                            footer = lines[(i + 1)..];
-                            break;
-                        }
+#endif
+                InsertDependenciesAndExclusions(cleanedLines, GetDependenciesSection(dependencies),
+                    GetExclusionsSection());
+                File.WriteAllLines(mainTemplatePath, cleanedLines);
+            }
+            else
+            {
+                throw new BuildFailedException("Main Template Gradle file not found!");
+            }
+        }
 
-                        if (lines[i].Contains("compileSdkVersion"))
-                        {
-                            exclusions = lines[startStep..(i - 1)];
-                            footer = lines[(i - 1)..];
-                            break;
-                        }
-                    }
+        public static List<string> RemoveResolverLines(string[] allLines)
+        {
+            var lines = new List<string>(allLines.Length);
+            bool inResolverSection = false;
+            for (var i = 0; i < allLines.Length; i++)
+            {
+                if (allLines[i].Contains("// Android Resolver"))
+                {
+                    inResolverSection = !inResolverSection;
+                    continue;
+                }
+
+                if (!inResolverSection)
+                {
+                    lines.Add(allLines[i]);
                 }
             }
 
-            fullString.AddRange(header);
-            fullString.Add(GetRepoSection(repositories));
-            fullString.AddRange(applyPlugins);
-            fullString.AddRange(dependenciesHeader);
-            fullString.Add(GetDependenciesSection(dependencies));
-            fullString.Add(dependenciesFooter + "\n");
-            fullString.Add(GetExclusionsSection());
-            fullString.AddRange(footer);
-            File.WriteAllLines(mainTemplatePath, fullString);
+            return lines;
+        }
+
+        public static void InsertRepos(List<string> lines, string repoSection)
+        {
+            for (var i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].Contains("apply plugin: 'com.android.library'"))
+                {
+                    lines.Insert(i, repoSection);
+                    break;
+                }
+            }
+        }
+
+        public static void InsertDependenciesAndExclusions(List<string> lines, string dependenciesSection,
+            string exclusions)
+        {
+            for (var i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].Contains("**DEPS**}"))
+                {
+                    lines.Insert(i + 1, exclusions);
+                    lines.Insert(i, dependenciesSection);
+                    break;
+                }
+            }
+        }
+
+        public static string[] FindDependencies(string[] allLines, out int startPoint)
+        {
+            var startDependencies = 0;
+            var endDependencies = 0;
+            var resolverStart = -1;
+            var resolverEnd = 0;
+            for (var i = 0; i < allLines.Length; i++)
+            {
+                if (allLines[i].Contains("dependencies {"))
+                {
+                    startDependencies = i;
+                }
+
+                if (startDependencies > 0 && allLines[i].Contains("// Android Resolver Dependencies Start"))
+                {
+                    resolverStart = i;
+                }
+
+                if (resolverStart >= 0 && allLines[i].Contains("// Android Resolver Dependencies End"))
+                {
+                    resolverEnd = i;
+                }
+
+                if (allLines[i].Contains("**DEPS**"))
+                {
+                    endDependencies = i;
+                    break;
+                }
+            }
+
+            List<string> dependenciesSection = new List<string>();
+            for (var i = startDependencies; i <= endDependencies; i++)
+            {
+                if (resolverStart >= 0 && i >= resolverStart && i <= resolverEnd) continue;
+                dependenciesSection.Add(allLines[i]);
+            }
+
+            dependenciesSection.Insert(dependenciesSection.Count - 2, "");
+            startPoint = startDependencies;
+            return dependenciesSection.ToArray();
         }
 
         public int callbackOrder => -1;
