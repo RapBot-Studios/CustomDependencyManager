@@ -83,12 +83,14 @@ namespace Google
                     }
                     else
                     {
-                        throw new BuildFailedException(result.error);
+                        Debug.LogError(result.output);
+                        throw new BuildFailedException("Cocoapods repo update failed");
                     }
                 }
                 else
                 {
-                    throw new BuildFailedException(result.error);
+                    Debug.LogError(result.output);
+                    throw new BuildFailedException("Cocoapods install failed");
                 }
             }
         }
