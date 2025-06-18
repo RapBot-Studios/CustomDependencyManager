@@ -2,13 +2,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 
 namespace Google
 {
 #if UNITY_ANDROID
-    public class AndroidResolver : IPreprocessBuildWithReport
+    public class AndroidResolver : IPreprocessBuildWithReport,IPostGenerateGradleAndroidProject
     {
         private const string AndroidPluginsDir = "Assets/Plugins/Android";
 
@@ -30,11 +31,11 @@ namespace Google
             "// Android Resolver Dependencies Start\n{0}// Android Resolver Dependencies End";
 
         private const string ExclusionsSectionFormat =
-            "// Android Resolver Exclusions Start\nandroid {{\n  packagingOptions {{\n{0}  }}\n}}\n// Android Resolver Exclusions End";
+            "// Android Resolver Exclusions Start\nandroid {{\n    ndkVersion \"**NDKVERSION**\" \n    namespace \"com.unity3d.player\" \n    packaging {{\n{0}  }}\n}}\n// Android Resolver Exclusions End";
 
         private const string RepositoryFormat = "        maven {{\n           url \"{0}\"  //{1}\n        }}\n";
         private const string DependencyFormat = "    implementation '{0}:{1}' // {2}\n";
-        private const string ExclusionFormat = "      exclude ('/lib/{0}/*' + '*')\n";
+        private const string ExclusionFormat = "        exclude ('/lib/{0}/*' + '*')\n";
 
         private static string[] AllSupportedABI =
             {"armeabi", "armeabi-v7a", "arm64-v8a", "x86", "x86_64", "mips", "mips64"};
@@ -243,6 +244,14 @@ namespace Google
         }
 
         public int callbackOrder => -1;
+        public void OnPostGenerateGradleAndroidProject(string path)
+        {
+            var mainTemplatePath = Path.Combine(path, "build.gradle");
+            if (File.Exists(mainTemplatePath))
+            {
+
+            }
+        }
 
         public void OnPreprocessBuild(BuildReport report)
         {

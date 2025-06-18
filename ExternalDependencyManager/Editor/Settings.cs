@@ -43,7 +43,7 @@ namespace Google
         }
 
         [HideInInspector] public bool useJetifier;
-
+        [HideInInspector] public string postInstallCommand;
         public void ConfirmSettings()
         {
             if (useJetifier && SetCustomTemplate("gradleTemplate.properties"))
@@ -193,7 +193,7 @@ namespace Google
                     new GUIContent("Use Jetifier",
                         "Legacy Android support libraries and references to them from other libraries will be rewritten to use Jetpack using the Jetifier tool. Enabling option allows an application to use Android Jetpack when other libraries in the project use the Android support libraries."),
                     Instance.useJetifier);
-
+            Instance.postInstallCommand = EditorGUILayout.TextField("Post Install Command", Instance.postInstallCommand);
             if (EditorGUI.EndChangeCheck())
             {
                 Instance.ConfirmSettings();

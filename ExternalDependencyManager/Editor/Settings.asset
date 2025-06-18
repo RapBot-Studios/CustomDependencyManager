@@ -13,3 +13,5 @@ MonoBehaviour:
   m_Name: Settings
   m_EditorClassIdentifier: 
   useJetifier: 1
+  postInstallCommand: system("xcrun -sdk iphoneos bitcode_strip -r #{framework_path}/TenjinSDK/TenjinSDK.xcframework/ios-arm64_armv7/TenjinSDK.framework/TenjinSDK
+    -o #{framework_path}/TenjinSDK/TenjinSDK.xcframework/ios-arm64_armv7/TenjinSDK.framework/TenjinSDK")
