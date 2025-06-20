@@ -14,7 +14,9 @@ namespace Google
         private const string PodFormat = "  pod '{0}', '{1}' #{2}";
         private const string FixDirectoriesInstruction =
             "post_install do |installer|\n\tinstaller.aggregate_targets.each do |target|\n\t\ttarget.xcconfigs.each do |variant, xcconfig|\n\t\t\txcconfig_path = target.client_root + target.xcconfig_relative_path(variant)\n\t\t\tIO.write(xcconfig_path, IO.read(xcconfig_path).gsub(\"DT_TOOLCHAIN_DIR\", \"TOOLCHAIN_DIR\"))\n\t\tend\n\tend\n\tinstaller.pods_project.targets.each do |target|\n\t\ttarget.build_configurations.each do |config|\n\t\t\tif config.base_configuration_reference.is_a? Xcodeproj::Project::Object::PBXFileReference\n\t\t\t\txcconfig_path = config.base_configuration_reference.real_path\n\t\t\t\tIO.write(xcconfig_path, IO.read(xcconfig_path).gsub(\"DT_TOOLCHAIN_DIR\", \"TOOLCHAIN_DIR\"))\n\t\t\tend\n\t\tend\n\tend\nend";
-        private const string PostInstallFormat = "post_install do |installer|\n\tframework_path = \"#{Dir.pwd}/Pods\"\n\t";
+        private const string PostInstallFormat = "post_install do |installer|\n\t";
+        private const string UseFrameworks = "use_frameworks!\n";
+        private const string UseFrameworksStatic = "use_frameworks! :linkage => :static\n";
         private static bool HasCocoapods(out string path)
         {
             path = Path.Combine("/opt/homebrew/bin", "pod");
@@ -50,8 +52,10 @@ namespace Google
             {
                 podfile += string.Format(PodFormat, pod.package, pod.version, pod.xmlPath) + "\n";
             }
-
-            podfile += "end\ntarget 'Unity-iPhone' do\nend\nuse_frameworks!\n"+PostInstallFormat + Settings.Instance.postInstallCommand + "\nend";
+            podfile += "end\n";
+            if (Settings.Instance.alwaysAddMainTarget) podfile += "target 'Unity-iPhone' do\nend\n";
+            if(Settings.Instance.addUseFrameworks) podfile += Settings.Instance.linkFrameworksStatically ? UseFrameworksStatic : UseFrameworks;
+            //podfile += PostInstallFormat + Settings.Instance.postInstallCommand + "\nend";
 
             var podfilePath = Path.Combine(xcodeProjectPath, "Podfile");
             File.WriteAllText(podfilePath, podfile);
@@ -92,7 +96,7 @@ namespace Google
             }
         }
 
-        public int callbackOrder => 999;
+        public int callbackOrder => 70;
 
         public void OnPostprocessBuild(BuildReport report)
         {

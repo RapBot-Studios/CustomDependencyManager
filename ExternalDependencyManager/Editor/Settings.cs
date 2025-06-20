@@ -8,7 +8,8 @@ namespace Google
     public class Settings : ScriptableObject
     {
         private const string AndroidPluginsFolder = "Assets/Plugins/Android";
-        public const string SettingsPath = "Assets/ExternalDependencyManager/Editor/Settings.asset";
+        public const string SettingsDirectory = "Assets/ExternalDependencyManager/Editor";
+        public const string SettingsPath = SettingsDirectory + "/Settings.asset";
         private static Settings _instance;
 
         public static Settings Instance
@@ -17,6 +18,7 @@ namespace Google
             {
                 if (_instance == null)
                 {
+
                     if (File.Exists(SettingsPath))
                     {
                         _instance = AssetDatabase.LoadAssetAtPath<Settings>(SettingsPath);
@@ -33,6 +35,7 @@ namespace Google
 
         public static Settings CreateInstance()
         {
+            if (!Directory.Exists(SettingsDirectory)) Directory.CreateDirectory(SettingsDirectory);
             AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<Settings>(), SettingsPath);
             AssetDatabase.SaveAssets();
             _instance = AssetDatabase.LoadAssetAtPath<Settings>(SettingsPath);
@@ -44,6 +47,9 @@ namespace Google
 
         [HideInInspector] public bool useJetifier;
         [HideInInspector] public string postInstallCommand;
+        [HideInInspector] public bool addUseFrameworks;
+        [HideInInspector] public bool linkFrameworksStatically;
+        [HideInInspector] public bool alwaysAddMainTarget;
         public void ConfirmSettings()
         {
             if (useJetifier && SetCustomTemplate("gradleTemplate.properties"))
@@ -187,13 +193,19 @@ namespace Google
                     }
                 }
             }
-
             Instance.useJetifier =
-                EditorGUILayout.Toggle(
+                EditorGUILayout.ToggleLeft(
                     new GUIContent("Use Jetifier",
                         "Legacy Android support libraries and references to them from other libraries will be rewritten to use Jetpack using the Jetifier tool. Enabling option allows an application to use Android Jetpack when other libraries in the project use the Android support libraries."),
                     Instance.useJetifier);
+            EditorGUILayout.Separator();
             Instance.postInstallCommand = EditorGUILayout.TextField("Post Install Command", Instance.postInstallCommand);
+            Instance.addUseFrameworks = EditorGUILayout.ToggleLeft(new GUIContent("Add use_frameworks! to Podfile"), Instance.addUseFrameworks);
+            if (Instance.addUseFrameworks)
+            {
+                Instance.linkFrameworksStatically = EditorGUILayout.ToggleLeft(new GUIContent("Link Frameworks Statically"), Instance.linkFrameworksStatically);
+            }
+            Instance.alwaysAddMainTarget = EditorGUILayout.ToggleLeft(new GUIContent("Always Add Main Target"), Instance.alwaysAddMainTarget);
             if (EditorGUI.EndChangeCheck())
             {
                 Instance.ConfirmSettings();
